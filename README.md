@@ -14,7 +14,7 @@
 
 5. ```cd kafka_2.13-3.5.1/```
 
-6. Do a ```sudo nano config/server.properties``` - change ADVERTISED_LISTENERS to public ip of the EC2 instance (currently it references a local server)
+6. Do a ```sudo nano config/server.properties``` - uncomment and change ADVERTISED_LISTENERS to public ip of the EC2 instance (currently it references a local server)
 
 7. Start Zookeeper: ```bin/zookeeper-server-start.sh config/zookeeper.properties```
 
