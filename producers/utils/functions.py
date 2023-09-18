@@ -6,11 +6,12 @@ from kafka import KafkaProducer
 
 def load_env_variables():
     try:
-        with open('.env.yml') as file:
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.yml')
+        with open(file_path) as file:
             payload = yaml.safe_load(file)
         for item in payload:
-            os.environ[item] = payload.get(item)           
-        print("Loaded environment variables.")
+            os.environ[item] = payload.get(item)     
+        print("Successfully loaded environment variables.")
     except Exception as error:
         print(error)
 
