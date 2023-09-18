@@ -1,17 +1,9 @@
 import os
-import yaml
 import json
 import websocket
 from datetime import datetime, timezone
+from utils import functions as f
 
-def get_credentials():
-    try:
-        with open('.env.yml') as file:
-            payload = yaml.safe_load(file)
-        os.environ['FINNHUB_API_KEY'] = payload.get('FINNHUB_API_KEY')
-        print("Loaded environment variables.")
-    except Exception as error:
-        print(error)
 
 class FinnhubProducer():
     """
@@ -20,6 +12,9 @@ class FinnhubProducer():
     to Kafka topic for downstream consumers.
     """
     def __init__(self) -> None:
+
+        self.producer = f.load_producer(os.environ["KAFKA_SERVER"], os.environ["KAFKA_PORT"])
+
         websocket.enableTrace(True)
         self.ws = websocket.WebSocketApp(
             f'wss://ws.finnhub.io?token={os.environ["FINNHUB_API_KEY"]}',
@@ -31,7 +26,6 @@ class FinnhubProducer():
         self.ws.run_forever()
 
     def on_message(self, ws, message):
-        print(message)
         if message == """{"type":"ping"}""":
             date_fmt = "%Y-%m-%d, %H:%M:%S"
             print(f"Stock market is currently closed. Current UTC time: {datetime.now(timezone.utc).strftime(date_fmt)}")
@@ -39,7 +33,10 @@ class FinnhubProducer():
             message_json = json.loads(message)
             message_json["timestamp"] = datetime.now(timezone.utc).timestamp() * 1000
             message_json = json.dumps(message_json)
-            print(message_json)
+            print(f"Message payload: {message_json}")
+
+            self.producer.send(os.environ["KAFKA_TOPIC"], value=message_json) \
+                .add_callback(f.on_send_success).add_errback(f.on_send_error)
 
     def on_error(self, ws, error):
         print(error)
@@ -57,5 +54,5 @@ class FinnhubProducer():
         print(f'Subscription for {ticker} succeeded')
 
 if __name__ == "__main__":
-    get_credentials()
+    f.load_env_variables()
     FinnhubProducer()
