@@ -1,0 +1,21 @@
+version: "3.6"
+
+services:
+
+  spark:
+    build:
+      context: ./consumers
+      dockerfile: Dockerfile
+    container_name: spark-consumer
+
+  cassandra:
+    build:
+      context: ./cassandra
+      dockerfile: Dockerfile
+    container_name: cassandra
+
+  marketproducers:
+    build:
+      context: ./producers
+      dockerfile: Dockerfile
+    container_name: market-producers

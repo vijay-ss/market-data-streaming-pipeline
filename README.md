@@ -38,4 +38,4 @@ This project pushes the image to AWS ECR, in order to continuously transmit data
 
 ```docker run market-stream-app```
 
-**note for Apple M1/M2 silicon, ensure the tag ```--platform=linux/amd64``` is added to the build command, as AWS ECS may error at runtime
+**note for Apple M1/M2 silicon, ensure the tag ```--platform=linux/amd64``` is added to the build command, as AWS ECS may error at runtime depending on the hardware being used
