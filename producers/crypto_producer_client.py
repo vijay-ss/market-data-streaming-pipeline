@@ -28,7 +28,7 @@ class CoinCapProducer():
 
     def on_message(self, ws, message):
         message_json = json.loads(message)
-        message_json["timestamp"] = datetime.now(timezone.utc).timestamp() * 1000
+        message_json["timestamp"] = datetime.now(timezone.utc).timestamp()
         print(f"Message payload: {message_json}")
 
         self.producer.send(os.environ["KAFKA_TOPIC"], value=message_json) \

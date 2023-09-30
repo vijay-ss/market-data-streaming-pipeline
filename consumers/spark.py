@@ -1,6 +1,9 @@
 import os
 import yaml
+from datetime import datetime
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, explode, from_json
+from pyspark.sql.types import StructType, StringType, ArrayType, StructField
 
 def load_env_variables():
     try:
@@ -15,13 +18,12 @@ def load_env_variables():
 
 if __name__ == "__main__":
 	load_env_variables()
-    # os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-10_2.12:3.2.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell'
 
 	packages = [
 		"org.apache.spark:spark-streaming-kafka-0-10_2.12:3.2.0",
 		"org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0"
 	]
-	
+
 	spark = SparkSession \
 			.builder \
 			.appName("Kafka Market Stream") \
@@ -42,15 +44,73 @@ if __name__ == "__main__":
 		.option("spark.streaming.kafka.maxRatePerPartition", "50") \
 		.load()
 	
-	# .option("kafka.security.protocol", "SSL") \
-	
+	print("Source schema:")
 	df.printSchema()
 
-	query = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)") \
+	def get_prices(s):
+		import json
+		try:
+			data = json.loads(s)
+			timestamp = data["timestamp"]
+			timestamp = datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")
+		
+			del data['timestamp']
+
+			keys = list(data.keys())
+			values = list(data.values())
+
+			# headers = ["name", "price"]
+			# for n, p in zip(keys, values):
+			# 	print(n, p)
+			# items = [dict(zip(headers, [n, p])) for n, p in zip(keys, values)]
+			# print(items)
+			# d = {
+			# 	'items': items
+			# }
+			# print(d)
+
+			items = []
+			for index in range(len(keys)):
+				items.append(
+					{
+						"name": keys[index],
+						"price": values[index],
+						"timestamp": timestamp
+					}
+				)
+			return json.dumps(items)
+		except:
+			return None
+	spark.udf.register("get_prices", get_prices)
+
+	df = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING) as payload")
+	df = df.selectExpr("get_prices(payload) prices")
+
+	schema = ArrayType(
+		StructType(
+			[
+				StructField("name", StringType()),
+				StructField("price", StringType()),
+				StructField("timestamp", StringType())
+			]
+		)
+	)
+
+	df = df.withColumn('temp', explode(from_json('prices', schema=schema))) \
+            .select(
+                	col('temp.name'),
+                    col('temp.price'),
+                    col('temp.timestamp')
+            )
+	df.printSchema()
+
+	
+	query = df \
         .writeStream \
 		.format("console") \
-		.option("checkpointLocation", "checkpoint") \
-		.start()
-        # .trigger(processingTime='20 seconds') \
+        .option("checkpointLocation", "checkpoint") \
+        .options(truncate=False) \
+        .start()
+		# .trigger(processingTime='20 seconds')
 
 	query.awaitTermination()
