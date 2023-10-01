@@ -1,24 +1,36 @@
 # market-data-streaming-pipeline
 
+## Setup and Configuration Guide
+
 ## Setup Kafka server on AWS EC2
 
 1. SSH into your EC2 machine of choice
     - Note: this project uses the AWS EC2 t2.micro, which is included in the free tier
     - There is a handy [article](https://www.linkedin.com/pulse/kafka-aws-free-tier-steven-aranibar/) to reduce Kafka memory usage for the t2.micro machine
 
-2. Download Kafka ```wget https://downloads.apache.org/kafka/3.5.1/kafka_2.13-3.5.1.tgz```
+2. Download Kafka 
 
-3. Unzip ```tar -xvf kafka_2.13-3.5.1.tgz```
+```wget https://downloads.apache.org/kafka/3.5.1/kafka_2.13-3.5.1.tgz```
 
-4. Install JDK ```sudo yum install java-1.8.0-openjdk```
+3. Unzip 
+
+```tar -xvf kafka_2.13-3.5.1.tgz```
+
+4. Install JDK 
+
+```sudo yum install java-1.8.0-openjdk```
 
 5. ```cd kafka_2.13-3.5.1/```
 
 6. Do a ```sudo nano config/server.properties``` - uncomment and change ADVERTISED_LISTENERS to public ip of the EC2 instance (currently it references a local server)
 
-7. Start Zookeeper: ```bin/zookeeper-server-start.sh config/zookeeper.properties```
+7. Start Zookeeper
 
-8. Start Kafka server: ```bin/kafka-server-start.sh config/server.properties```
+```bin/zookeeper-server-start.sh config/zookeeper.properties```
+
+8. Start Kafka server
+
+```bin/kafka-server-start.sh config/server.properties```
 
 ### Create Kafka topic
 
@@ -39,3 +51,15 @@ This project pushes the image to AWS ECR, in order to continuously transmit data
 ```docker run market-stream-app```
 
 **note for Apple M1/M2 silicon, ensure the tag ```--platform=linux/amd64``` is added to the build command, as AWS ECS may error at runtime depending on the hardware being used
+
+## Create Cassandra table and keyspace
+
+Cassandra was installed both locally on MacOs (for testing) and on AWS EC2.
+
+When running locally on MacOS via Homebrew, be sure to start and stop the service upon completion:
+
+```brew services start cassandra```
+
+```brew services stop cassandra```
+
+The Python API for Cassandra is used to create the keyspace and table programmatically.

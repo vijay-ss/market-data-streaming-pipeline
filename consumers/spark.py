@@ -1,9 +1,12 @@
 import os
 import yaml
+import json
 from datetime import datetime
+from cassandra.cluster import Cluster
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, explode, from_json
-from pyspark.sql.types import StructType, StringType, ArrayType, StructField
+from pyspark.sql.types import StructType, StringType, ArrayType, StructField, TimestampType
+
 
 def load_env_variables():
     try:
@@ -16,12 +19,44 @@ def load_env_variables():
     except Exception as error:
         print(error)
 
+
+def connect_cassandra():
+	try:
+		cluster = Cluster([os.environ["CASSANDRA_SERVER"]])
+		session = cluster.connect()
+		replication = "{'class' : 'SimpleStrategy', 'replication_factor' : 1 }"
+
+		session.execute("""
+				CREATE KEYSPACE IF NOT EXISTS {keyspace}
+					WITH REPLICATION = {replication};
+				""".format(keyspace=os.environ["CASSANDRA_KEYSPACE"], replication=replication)
+		)
+
+		session.execute(f"""
+				CREATE TABLE IF NOT EXISTS {os.environ["CASSANDRA_KEYSPACE"]}.{os.environ["CASSANDRA_TABLE"]} (
+					name text,
+					price double,
+					timestamp timestamp,
+					PRIMARY KEY ((name), price, timestamp));
+				"""
+		)
+		cluster.shutdown()
+	except Exception as error:
+		print(error)
+
+
 if __name__ == "__main__":
-	load_env_variables()
+
+	try:
+		load_env_variables()
+		connect_cassandra()
+	except Exception as error:
+		print(error)
 
 	packages = [
 		"org.apache.spark:spark-streaming-kafka-0-10_2.12:3.2.0",
-		"org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0"
+		"org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0",
+        "com.datastax.spark:spark-cassandra-connector_2.12:3.4.1"
 	]
 
 	spark = SparkSession \
@@ -42,13 +77,13 @@ if __name__ == "__main__":
 		.option("includeHeaders", "true") \
 		.option("startingOffsets", "latest") \
 		.option("spark.streaming.kafka.maxRatePerPartition", "50") \
+		.option("spark.cassandra.connection.host", os.environ["CASSANDRA_SERVER"]) \
 		.load()
 	
 	print("Source schema:")
 	df.printSchema()
 
-	def get_prices(s):
-		import json
+	def parse_event(s):
 		try:
 			data = json.loads(s)
 			timestamp = data["timestamp"]
@@ -58,16 +93,6 @@ if __name__ == "__main__":
 
 			keys = list(data.keys())
 			values = list(data.values())
-
-			# headers = ["name", "price"]
-			# for n, p in zip(keys, values):
-			# 	print(n, p)
-			# items = [dict(zip(headers, [n, p])) for n, p in zip(keys, values)]
-			# print(items)
-			# d = {
-			# 	'items': items
-			# }
-			# print(d)
 
 			items = []
 			for index in range(len(keys)):
@@ -81,17 +106,17 @@ if __name__ == "__main__":
 			return json.dumps(items)
 		except:
 			return None
-	spark.udf.register("get_prices", get_prices)
+	spark.udf.register("parse_event", parse_event)
 
 	df = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING) as payload")
-	df = df.selectExpr("get_prices(payload) prices")
+	df = df.selectExpr("parse_event(payload) prices")
 
 	schema = ArrayType(
 		StructType(
 			[
 				StructField("name", StringType()),
 				StructField("price", StringType()),
-				StructField("timestamp", StringType())
+				StructField("timestamp", TimestampType())
 			]
 		)
 	)
@@ -107,10 +132,9 @@ if __name__ == "__main__":
 	
 	query = df \
         .writeStream \
-		.format("console") \
+		.format("org.apache.spark.sql.cassandra") \
+        .options(keyspace=os.environ["CASSANDRA_KEYSPACE"], table=os.environ["CASSANDRA_TABLE"]) \
         .option("checkpointLocation", "checkpoint") \
-        .options(truncate=False) \
         .start()
-		# .trigger(processingTime='20 seconds')
 
 	query.awaitTermination()
