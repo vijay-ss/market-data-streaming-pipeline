@@ -1,4 +1,27 @@
-# market-data-streaming-pipeline
+# Real-Time Market Data Streaming Pipeline
+
+This project is a real-time data streaming pipeline using both Finnhub and CoinCap websocket API. It is designed to ingest live data into the AWS cloud platform, process and write to a final database to serve end-users.
+
+## Architecture
+![](img/architecture.png)
+
+## Methodology
+
+Each individual application is build within the AWS cloud infrastructure, but can also be executed locally within docker containers if necessary.
+
+There are 4 main steps:
+
+### Data Ingestion
+Finnhub and CoinCap data sources are connected via websocket API interface, via containerized Python application running on AWS Elastic Cloud.
+
+### Message Stream
+Event data from the data ingestion step are fed into a Kafka broker running on AWS EC2 instance.
+
+### Stream Processor
+A Spark Streaming application is connected to the Kafka topic as a consumer, and processes the raw data in json format. The data is transformed into a tabular format. The data is loaded to a Cassandra table.
+
+### Database
+Cassandra tables are used to store data sent from Spark. Cassandra allows for a high volume of writes, which is ideal for market data being ingested each second.
 
 ## Setup and Configuration Guide
 
